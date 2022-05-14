@@ -1,0 +1,31 @@
+node{
+    stage('SCM Checkout')
+    {
+        git url: 'https://github.com/RioThiyagu/java-web-app-docker',branch: 'master'
+    }
+    stage('clean package')
+    {
+        def mavenHome =  tool name: "Maven", type: "maven"
+        sh "${mavenHome}/bin/mvn clean package"
+    }
+    stage('Docker image build')
+    {
+        sh "docker build -t thiyagurio/java-web-app:${BUILD_NUMBER} ."
+    }
+    stage('Push image to docker')
+    {
+       withCredentials([string(credentialsId: 'dockerloginpwd', variable: 'dockerloginpwd')]) 
+       {
+            sh "docker login -u thiyagurio -p ${dockerloginpwd}"
+       }
+        sh "docker push thiyagurio/java-web-app:${BUILD_NUMBER}"
+    }
+    stage('Deploy container in docker mac')
+    {
+        sshagent(['Docker-prod-server'])
+        {
+            sh 'ssh -o StrictHostKeyChecking=no ubuntu@172.31.6.71 docker rm -f javawebappcontainer || true'
+            sh 'ssh -o StrictHostKeyChecking=no ubuntu@172.31.6.71 docker run -d -p 8080:8080 --name javawebappcontainer thiyagurio/java-web-app:${BUILD_NUMBER}'
+        }
+    }
+}
